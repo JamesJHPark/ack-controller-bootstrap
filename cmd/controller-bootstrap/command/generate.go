@@ -34,13 +34,19 @@ type metaVars struct {
 	RuntimeVersion      string
 }
 
+var updateFiles = []string{
+	"README.md.tpl",
+	"OWNERS.tpl",
+	"OWNERS_ALIASES.tpl",
+}
+
 var templateCmd = &cobra.Command{
 	Use:   "generate <service>",
 	Short: "generate template files for an ACK service controller",
 	RunE:  generateTemplates,
 }
 
-// generateTemplates generate the template files in an ACK service controller repository
+// generateTemplates render the template files in an ACK service controller repository
 func generateTemplates(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("please specify the AWS service alias to generate template files")
@@ -67,22 +73,31 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		RuntimeVersion:      optRuntimeVersion,
 	}
 
-	// Append the template files inside the template directory to filePaths
+	// Append the template files inside the template directory to filePaths.
+	// For an existing service controller, update the files in the updateFiles slice
 	var filePaths []string
 	basePath := filepath.Join(cd, "template")
-	err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			filePaths = append(filePaths, path)
-		}
-		return nil
-	})
+	if optExistingController {
+		filePaths = updateFiles
+	} else {
+		err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				filePaths = append(filePaths, path)
+			}
+			return nil
+		})
+	}
 
-	// Loop over the template file paths to parse and apply the template files to the tplVars data object
-	for _, file := range filePaths {
-		tmp, err := template.ParseFiles(file)
+	// 	Loop over the template file paths to parse, execute, and render the files/directories
+	//	in an ACK service controller repository
+	for _, filePath := range filePaths {
+		if optExistingController {
+			filePath = filepath.Join(basePath, filePath)
+		}
+		tmp, err := template.ParseFiles(filePath)
 		if err != nil {
 			return err
 		}
@@ -90,48 +105,22 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		if err = tmp.Execute(&buf, tplVars); err != nil {
 			return err
 		}
-		// For an existing service controller, update README.md, OWNERS, OWNERS_ALIAS files
-		if optExistingController {
-			var updateFile bool
-			updateFile = strings.HasSuffix(file, "README.md.tpl") || strings.Contains(file, "OWNERS")
-			// Provide dry-run functionality, default value set to false.
-			if optDryRun && updateFile {
-				fmt.Printf("============================= %s ======================================\n", file)
-				fmt.Println(strings.TrimSpace(buf.String()))
-				continue
-			}
-			if updateFile {
-				err = writeFiles(file, cd, buf)
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			if optDryRun {
-				fmt.Printf("============================= %s ======================================\n", file)
-				fmt.Println(strings.TrimSpace(buf.String()))
-				continue
-			}
-			err = writeFiles(file, cd, buf)
-			if err != nil {
-				return err
-			}
+		// Dry-run with default value set to false
+		if optDryRun {
+			fmt.Printf("============================= %s ======================================\n", filePath)
+			fmt.Println(strings.TrimSpace(buf.String()))
+			continue
 		}
-	}
-	return nil
-}
-
-// writeFiles processes and generates the template files/directories in an ACK service controller repository
-func writeFiles(file string, cd string, buf bytes.Buffer) error {
-	trimFile := strings.TrimPrefix(file, filepath.Join(cd, "template"))
-	trimFile = strings.TrimSuffix(trimFile, ".tpl")
-	filePath := filepath.Join(optOutputPath, trimFile)
-	outDir := filepath.Dir(filePath)
-	if _, err := ensureDir(outDir); err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(filePath, buf.Bytes(), 0666); err != nil {
-		return err
+		trimFile := strings.TrimPrefix(filePath, basePath)
+		trimFile = strings.TrimSuffix(trimFile, ".tpl")
+		outPath := filepath.Join(optOutputPath, trimFile)
+		outDir := filepath.Dir(outPath)
+		if _, err := ensureDir(outDir); err != nil {
+			return err
+		}
+		if err := ioutil.WriteFile(outPath, buf.Bytes(), 0666); err != nil {
+			return err
+		}
 	}
 	return nil
 }

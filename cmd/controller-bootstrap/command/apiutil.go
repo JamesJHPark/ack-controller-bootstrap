@@ -60,7 +60,7 @@ func getServiceResources(svcAlias string) error {
 	repoDirPath, err := ensureSDKRepo(ctx, repoPath)
 
 	// If the supplied service alias and service ID do not match,
-	// pass in the service model name in the findModelAPI method
+	// pass in the service model name to findModelAPI
 	if optModelName != "" {
 		svcFile, err = findModelAPI(repoDirPath, optModelName)
 	} else {
@@ -129,7 +129,7 @@ func findModelAPI(repoDirPath string, svcIdentifier string) (string, error) {
 }
 
 // modelAPI finds the aws-sdk-go model API object with the service api-2.json file.
-// Service metadata and resources are inferred from the API object.
+// Service metadata and resources are inferred from the API object
 func (a *AWSSDKHelper) modelAPI(filePath string) error {
 	// loads the API model file(s) and returns the map of API package
 	apis, err := a.loader.Load([]string{filePath})

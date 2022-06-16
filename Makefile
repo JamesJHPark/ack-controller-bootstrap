@@ -38,10 +38,8 @@ update-existing: build
 run:
 	@if [ -f ${CONTROLLER_DIR}/cmd/controller/main.go ]; then \
 	  make update-existing; \
-	  echo "controller exists"; \
 	else \
 	  make controller; \
-	  echo "controller doesn't exist"; \
 	fi
 
 controller: only-scaffolding
