@@ -34,6 +34,7 @@ var (
 	svcAbbreviation string
 	svcFullName     string
 	svcResources    []string
+	svcFile         string
 )
 
 const (
@@ -58,32 +59,18 @@ func getServiceResources(svcAlias string) error {
 	defer cancel()
 	repoDirPath, err := ensureSDKRepo(ctx, repoPath)
 
-	// default value of model could be service alias - if nobody provides the option -> service alias
-	// if they provide it, they will pass the model name into param of findModelAPI
-
-	// svcFile is assigned to the service api-2.json file path
-	svcFile, err := findModelAPI(repoDirPath, svcAlias)
-	if err != nil {
-		return err
-	}
-
-	// If service alias and service ID does not match, request user input for service model name
-	if svcFile == "" {
-		fmt.Print("unable to find the service api-2.json file. Please enter the service model name: ")
-		r := bufio.NewReader(os.Stdin)
-		modelName, err := r.ReadString('\n')
-		if err != nil {
-			fmt.Printf("unable to read the input for service model name %s\n", err)
-			return err
-		}
-		modelName = strings.TrimSuffix(modelName, "\n")
-		svcFile, err = findModelAPI(repoDirPath, modelName)
-		if err != nil {
-			return err
-		}
+	// If the supplied service alias and service ID do not match,
+	// pass in the service model name in the findModelAPI method
+	if optModelName != "" {
+		svcFile, err = findModelAPI(repoDirPath, optModelName)
+	} else {
+		svcFile, err = findModelAPI(repoDirPath, svcAlias)
 	}
 	if svcFile == "" {
 		return fmt.Errorf("unable to find the service api-2.json file")
+	}
+	if err != nil {
+		return err
 	}
 
 	// Find the service metadata and resource names of a supplied service alias
@@ -106,7 +93,7 @@ func newAWSSDKHelper(repoDirPath string) *AWSSDKHelper {
 }
 
 // findModelAPI returns the api-2.json file of a supplied AWS service alias
-func findModelAPI(repoDirPath string, svcAlias string) (string, error) {
+func findModelAPI(repoDirPath string, svcIdentifier string) (string, error) {
 	apisPath := filepath.Join(repoDirPath, "models", "apis")
 	var filePaths []string
 	err := filepath.Walk(apisPath, func(path string, info os.FileInfo, err error) error {
@@ -131,7 +118,7 @@ func findModelAPI(repoDirPath string, svcAlias string) (string, error) {
 				getServiceID := strings.Split(scanner.Text(), ":")[1]
 				re := regexp.MustCompile(`[," \t]`)
 				getServiceID = strings.ToLower(re.ReplaceAllString(getServiceID, ``))
-				if getServiceID == svcAlias {
+				if getServiceID == svcIdentifier {
 					outFile = file
 					return outFile, err
 				}
@@ -238,111 +225,3 @@ func contextWithSigterm(ctx context.Context) (context.Context, context.CancelFun
 
 	return ctx, cancelFunc
 }
-
-// todo: implementation # 2
-// remove the logs, err output
-//log.SetOutput(ioutil.Discard)
-//os.Stderr = nil
-//
-//h := newAWSSDKHelper(repoDirPath)
-//h.altFunc(repoDirPath, svcID)
-//testFunc2(repoDirPath, svcID)
-
-// todo: implementation # 3
-//f, err := os.Open(svcFile)
-//if err != nil {
-//	return err
-//}
-//defer f.Close()
-//
-//b, err := ioutil.ReadAll(f)
-//if err != nil {
-//	return err
-//}
-//
-//var data map[string]interface{}
-//err = json.Unmarshal(b, &data)
-//if err != nil {
-//	return err
-//}
-
-// parse the api-2.json file of a specified service
-//parseServiceAPI(data)
-// returns the api-2.json file for a specified service
-//func (a *AWSSDKHelper) altFunc(repoDirPath string, svcAlias string) error {
-//	apisPath := filepath.Join(repoDirPath, "models", "apis")
-//	var operationsList []string
-//	err := filepath.Walk(apisPath, func(path string, info os.FileInfo, err error) error {
-//		if err != nil {
-//			return err
-//		}
-//		if strings.Contains(path, "api-2.json") {
-//			apis, err := a.loader.Load([]string{path})
-//			if err != nil {
-//				return err
-//			}
-//
-//			// apis is a map of specified import path and service package name with pointers to aws-sdk-go
-//			// model API object
-//			for _, api := range apis {
-//				//println("PRINT OUT KEY", key)
-//				_ = api.ServicePackageDoc()
-//				getServiceID := strings.ToLower(api.Metadata.ServiceID)
-//				if getServiceID == svcAlias {
-//					svcID = api.Metadata.ServiceID
-//					svcAbbreviation = api.Metadata.ServiceAbbreviation
-//					svcFullName = api.Metadata.ServiceFullName
-//					operationsList = api.OperationNames()
-//				}
-//			}
-//		}
-//		return nil
-//	})
-//
-//	if err != nil {
-//		return err
-//	}
-//
-//	pluralize := pluralize.NewClient()
-//	// Search for operations with the prefix "Create" and append the resource names to the resources slice
-//	for _, opName := range operationsList {
-//		if strings.HasPrefix(opName, "CreateBatch") {
-//			continue
-//		}
-//		if strings.HasPrefix(opName, "Create") {
-//			resName := strings.TrimPrefix(opName, "Create")
-//			if pluralize.IsSingular(resName) {
-//				resources = append(resources, resName)
-//			}
-//		}
-//	}
-//	return nil
-//}
-
-//// todo: traverse the api-2.json file - note parseServiceAPI does not parse the array i.e. []interface{}
-// parse the key-value pair of map[string]interface{} for the specified service api-2.json file
-//func parseServiceAPI(dataMap map[string]interface{}) {
-//	for s, v := range dataMap {
-//		switch val := v.(type) {
-//		case map[string]interface{}:
-//			parseResources(s, "")
-//			parseServiceAPI(val)
-//		default:
-//			getServiceName := fmt.Sprintf("%v", v)
-//			parseResources(s, getServiceName)
-//		}
-//	}
-//}
-//
-//func parseResources(resName string, serviceName string) {
-//	if strings.HasPrefix(resName, "CreateBatch") {
-//		return
-//	}
-//	pluralize := pluralize.NewClient()
-//	if strings.HasPrefix(resName, "Create") {
-//		trimName := strings.TrimPrefix(resName, "Create")
-//		if pluralize.IsSingular(trimName) {
-//			resources = append(resources, trimName)
-//		}
-//	}
-//}

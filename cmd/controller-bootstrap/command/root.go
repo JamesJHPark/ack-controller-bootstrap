@@ -28,6 +28,7 @@ var (
 	optOutputPath         string
 	optAWSSDKGoVersion    string
 	optRuntimeVersion     string
+	optModelName          string
 	optDryRun             bool
 	optExistingController bool
 )
@@ -51,7 +52,7 @@ func init() {
 		os.Exit(1)
 	}
 	rootCmd.PersistentFlags().StringVarP(
-		&optOutputPath, "output", "o", "", "Path to directory to output generated template files",
+		&optOutputPath, "output", "o", "", "Path to ACK service controller directory to bootstrap",
 	)
 	rootCmd.PersistentFlags().StringVarP(
 		&optAWSSDKGoVersion, "aws-sdk-go-version", "v", "", "aws-sdk-go-version",
@@ -59,8 +60,11 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(
 		&optRuntimeVersion, "aws-controllers-k8s/runtime version", "r", "", "aws-controllers-k8s/runtime version",
 	)
-	rootCmd.PersistentFlags().BoolVar(
-		&optDryRun, "dry-run", false, "If true, outputs files to stdout",
+	rootCmd.PersistentFlags().StringVarP(
+		&optModelName, "service model name", "m", "", "service model name of the supplied service alias",
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&optDryRun, "dry-run", "d", false, "If true, output files to stdout",
 	)
 	rootCmd.PersistentFlags().BoolVarP(
 		&optExistingController, "existing service controller", "e", false, "If true, update the existing controller",
