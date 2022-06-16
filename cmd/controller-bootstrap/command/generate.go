@@ -46,7 +46,7 @@ var templateCmd = &cobra.Command{
 	RunE:  generateTemplates,
 }
 
-// generateTemplates render the template files in an ACK service controller repository
+// generateTemplates renders the template files in an ACK service controller repository
 func generateTemplates(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("please specify the AWS service alias to generate template files")
@@ -91,8 +91,8 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// 	Loop over the template file paths to parse, execute, and render the files/directories
-	//	in an ACK service controller repository
+	// Loop over the template file paths to parse, execute, and render the files/directories
+	// in an ACK service controller repository
 	for _, filePath := range filePaths {
 		if optExistingController {
 			filePath = filepath.Join(basePath, filePath)
