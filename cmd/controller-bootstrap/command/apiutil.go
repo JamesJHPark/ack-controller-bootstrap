@@ -26,9 +26,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
-)
 
-import awssdkmodel "github.com/aws/aws-sdk-go/private/model/api"
+	awssdkmodel "github.com/aws/aws-sdk-go/private/model/api"
+)
 
 var (
 	svcID           string
@@ -45,7 +45,7 @@ const (
 
 // AWSSDKHelper is a helper struct for aws-sdk-go model API
 type AWSSDKHelper struct {
-	loader *awssdkmodel
+	loader *awssdkmodel.Loader
 }
 
 // getServiceResources infers aws-sdk-go to find the service metadata and custom resources
