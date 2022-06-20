@@ -71,7 +71,7 @@ func getServiceResources(svcAlias string) error {
 		return err
 	}
 	if svcFile == "" {
-		return fmt.Errorf("unable to find the service api-2.json file")
+		return fmt.Errorf("unable to find the service api-2.json file, please specify the service model name")
 	}
 	h := newAWSSDKHelper(sdkDir)
 	err = h.modelAPI(svcFile)

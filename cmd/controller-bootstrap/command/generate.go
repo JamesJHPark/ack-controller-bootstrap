@@ -32,6 +32,7 @@ type svcVars struct {
 	CRDNames            []string
 	AWSSDKGoVersion     string
 	RuntimeVersion      string
+	ServiceModelName    string
 }
 
 var staticFiles = []string{
@@ -72,6 +73,7 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		CRDNames:            crdNames,
 		AWSSDKGoVersion:     optAWSSDKGoVersion,
 		RuntimeVersion:      optRuntimeVersion,
+		ServiceModelName:    optModelName,
 	}
 
 	// Append the template files inside the template directory to filePaths.
