@@ -3,53 +3,35 @@ SHELL := /bin/bash # Use bash syntax
 # Set up variables
 GO111MODULE=on
 
-GO_CMD_FLAGS=-tags codegen
-
-AWS_SERVICE:=$(shell echo $(SERVICE))
-ifeq ($(AWS_SERVICE),)
-  AWS_SERVICE:=""
-endif
+AWS_SERVICE=$(shell echo $(SERVICE))
 MODEL_NAME:=$(shell echo $(MODEL_NAME))
 ifeq ($(MODEL_NAME),)
   MODEL_NAME:=""
 endif
-CONTROLLER_BOOTSTRAP:=./bin/controller-bootstrap
-ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-CODE_GEN_DIR:=${ROOT_DIR}/../code-generator
-CONTROLLER_DIR:=${ROOT_DIR}/../${AWS_SERVICE}-controller
-EXISTING_CONTROLLER:="true"
-DRY_RUN:="false"
 
-#
-#AWS_SDK_GO_VERSION=$(shell curl -H "Accept: application/vnd.github.v3+json" \
-#                                 https://api.github.com/repos/aws/aws-sdk-go/releases/latest | jq -r '.tag_name')
-#ACK_RUNTIME_VERSION=$(shell curl -H "Accept: application/vnd.github.v3+json" \
-#								  https://api.github.com/repos/aws-controllers-k8s/runtime/releases/latest | jq -r '.tag_name')
-#
-
-AWS_SDK_GO_VERSION:=$(shell curl -sL https://github.com/aws/aws-sdk-go/releases/latest | grep -oE 'v+[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 )
-
-ACK_RUNTIME_VERSION:=$(shell curl -sL https://github.com/aws-controllers-k8s/runtime/releases/latest | grep -oE 'v+[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 )
-
+GO_CMD_FLAGS=-tags codegen
+CONTROLLER_BOOTSTRAP=./bin/controller-bootstrap
+ROOT_DIR=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+CODE_GEN_DIR=${ROOT_DIR}/../code-generator
+CONTROLLER_DIR=${ROOT_DIR}/../${AWS_SERVICE}-controller
+AWS_SDK_GO_VERSION=$(shell curl -H "Accept: application/vnd.github.v3+json" \
+                                 https://api.github.com/repos/aws/aws-sdk-go/releases/latest | jq -r '.tag_name')
+ACK_RUNTIME_VERSION=$(shell curl -H "Accept: application/vnd.github.v3+json" \
+								  https://api.github.com/repos/aws-controllers-k8s/runtime/releases/latest | jq -r '.tag_name')
 .DEFAULT_GOAL=run
+EXISTING_CONTROLLER="true"
+DRY_RUN="false"
 
 build:
 	@go build ${GO_CMD_FLAGS} -o ${CONTROLLER_BOOTSTRAP} ./cmd/controller-bootstrap/*.go
 
-only-scaffolding: build
-	@${CONTROLLER_BOOTSTRAP} generate -s ${AWS_SERVICE} -r ${ACK_RUNTIME_VERSION} -v ${AWS_SDK_GO_VERSION} -d=${DRY_RUN} -e="false" -o ${ROOT_DIR}/../${AWS_SERVICE}-controller -m ${MODEL_NAME}
+generate: build
+	@${CONTROLLER_BOOTSTRAP} generate -s ${AWS_SERVICE} -r ${ACK_RUNTIME_VERSION} -v ${AWS_SDK_GO_VERSION} -d=${DRY_RUN} -o ${ROOT_DIR}/../${AWS_SERVICE}-controller -m ${MODEL_NAME}
 
 update: build
 	@${CONTROLLER_BOOTSTRAP} generate -s ${AWS_SERVICE} -r ${ACK_RUNTIME_VERSION} -v ${AWS_SDK_GO_VERSION} -d=${DRY_RUN} -e=${EXISTING_CONTROLLER} -o ${ROOT_DIR}/../${AWS_SERVICE}-controller -m ${MODEL_NAME}
 
-run:
-	@if [ -f ${CONTROLLER_DIR}/cmd/controller/main.go ]; then \
-	  make update; \
-	else \
-	  make init; \
-	fi
-
-init: only-scaffolding
+init: generate
 	@export SERVICE=${AWS_SERVICE}
 	@echo "build controller attempt #1"
 	@cd ${CODE_GEN_DIR} && make -i build-controller >/dev/null 2>/dev/null
@@ -61,8 +43,15 @@ init: only-scaffolding
 	@cd ${CONTROLLER_DIR} && go mod tidy
 	@echo "final build controller attempt"
 	@cd ${CODE_GEN_DIR} && make build-controller
-	@echo "look inside ${AWS_SERVICE}-controller/generator.yaml for further instructions"
+	@echo "look inside controller-bootstrap/INSTRUCTIONS.md for further instructions"
 
-clean-controller-dir:
+run:
+	@if [ -f ${CONTROLLER_DIR}/cmd/controller/main.go ]; then \
+	  make update; \
+	else \
+	  make init; \
+	fi
+
+clean:
 	@cd ${CONTROLLER_DIR}
 	@rm -rf ${CONTROLLER_DIR}/..?* ${CONTROLLER_DIR}/.[!.]* ${CONTROLLER_DIR}/*

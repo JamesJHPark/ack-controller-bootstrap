@@ -34,15 +34,16 @@ type svcVars struct {
 	RuntimeVersion      string
 }
 
-var svcStaticFiles = []string{
+var staticFiles = []string{
 	"CODE_OF_CONDUCT.md.tpl",
 	"CONTRIBUTING.md.tpl",
 	"GOVERNANCE.md.tpl",
 	"LICENSE.tpl",
-	"README.md.tpl",
 	"NOTICE.tpl",
 	"OWNERS.tpl",
 	"OWNERS_ALIASES.tpl",
+	"README.md.tpl",
+	"SECURITY.md.tpl",
 }
 
 var templateCmd = &cobra.Command{
@@ -51,11 +52,8 @@ var templateCmd = &cobra.Command{
 	RunE:  generateTemplates,
 }
 
-// generateTemplates generates the template files and directories in an ACK service controller repository
+// generateTemplates generates the template files in an ACK service controller repository
 func generateTemplates(cmd *cobra.Command, args []string) error {
-	if optServiceAlias == "" {
-		return fmt.Errorf("please specify the AWS service alias to generate template files for an ACK service controller")
-	}
 	cd, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("unable to determine current working directory: %s\n", err)
@@ -66,8 +64,6 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	// Set tplVars with service metadata, custom resource names, and aws-sdk-go, ACK runtime versions
 	tplVars := svcVars{
 		ServiceID:           svcID,
 		ServicePackageName:  svcAlias,
@@ -79,11 +75,11 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 	}
 
 	// Append the template files inside the template directory to filePaths.
-	// For an existing service controller, update the list of files in the svcStaticFiles slice
+	// For an existing service controller, only update the list of files in the staticFiles slice
 	var filePaths []string
 	basePath := filepath.Join(cd, "template")
 	if optExistingController {
-		filePaths = svcStaticFiles
+		filePaths = staticFiles
 	} else {
 		err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -96,7 +92,7 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Loop over the template file paths to parse, execute, and render the files
+	// Loop over the template file paths to parse and render the files
 	// in an ACK service controller repository
 	for _, filePath := range filePaths {
 		if optExistingController {
@@ -110,14 +106,14 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		if err = tmp.Execute(&buf, tplVars); err != nil {
 			return err
 		}
+		trimPath := strings.TrimPrefix(filePath, basePath)
+		trimPath = strings.TrimSuffix(trimPath, ".tpl")
 		if optDryRun {
-			fmt.Printf("============================= %s ======================================\n", filePath)
+			fmt.Printf("============================= %s ======================================\n", trimPath)
 			fmt.Println(strings.TrimSpace(buf.String()))
 			continue
 		}
-		trimFile := strings.TrimPrefix(filePath, basePath)
-		trimFile = strings.TrimSuffix(trimFile, ".tpl")
-		outPath := filepath.Join(optOutputPath, trimFile)
+		outPath := filepath.Join(optOutputPath, trimPath)
 		outDir := filepath.Dir(outPath)
 		if _, err := ensureDir(outDir); err != nil {
 			return err

@@ -42,39 +42,29 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	_, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Printf("unable to determine $HOME: %s\n", err)
-		os.Exit(1)
-	}
-	_, err = os.Getwd()
-	if err != nil {
-		fmt.Printf("unable to determine current working directory: %s\n", err)
-		os.Exit(1)
-	}
 	rootCmd.PersistentFlags().StringVarP(
-		&optServiceAlias, "AWS service alias", "s", "", "supplied AWS service alias",
+		&optServiceAlias, "aws-service-alias", "s", "", "Supplied AWS service alias",
 	)
 	rootCmd.PersistentFlags().StringVarP(
-		&optRuntimeVersion, "aws-controllers-k8s/runtime version", "r", "", "aws-controllers-k8s/runtime version",
+		&optRuntimeVersion, "ack-runtime-version", "r", "", "Version of aws-controllers-k8s/runtime",
 	)
 	rootCmd.PersistentFlags().StringVarP(
-		&optAWSSDKGoVersion, "aws-sdk-go-version", "v", "", "aws-sdk-go-version",
+		&optAWSSDKGoVersion, "aws-sdk-go-version", "v", "", "Version of aws-sdk-go",
 	)
 	rootCmd.PersistentFlags().BoolVarP(
-		&optDryRun, "dry-run", "d", false, "If true, output files to stdout",
+		&optDryRun, "dry-run", "d", false, "Optional: if true, output files to stdout",
 	)
 	rootCmd.PersistentFlags().BoolVarP(
-		&optExistingController, "existing service controller", "e", false, "If true, update the existing controller",
+		&optExistingController, "existing-service-controller", "e", false, "Optional: if true, update the existing service controller",
 	)
 	rootCmd.PersistentFlags().StringVarP(
 		&optOutputPath, "output", "o", "", "Path to ACK service controller directory to bootstrap",
 	)
 	rootCmd.PersistentFlags().StringVarP(
-		&optModelName, "service model name", "m", "", "service model name of the supplied service alias",
+		&optModelName, "service-model-name", "m", "", "Optional: service model name of the supplied service alias",
 	)
-	rootCmd.MarkPersistentFlagRequired("AWS service alias")
-	rootCmd.MarkPersistentFlagRequired("aws-controllers-k8s/runtime version")
+	rootCmd.MarkPersistentFlagRequired("aws-service-alias")
+	rootCmd.MarkPersistentFlagRequired("ack-runtime-version")
 	rootCmd.MarkPersistentFlagRequired("aws-sdk-go-version")
 	rootCmd.MarkPersistentFlagRequired("output")
 	rootCmd.AddCommand(templateCmd)
