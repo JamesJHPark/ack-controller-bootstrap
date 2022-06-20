@@ -21,16 +21,17 @@ import (
 
 const (
 	appName      = "controller-bootstrap"
-	appShortDesc = "controller-bootstrap initializes a new ACK service controller repository"
+	appShortDesc = "A bootstrap tool to initialize an ACK service controller repository"
 )
 
 var (
-	optOutputPath         string
-	optAWSSDKGoVersion    string
+	optServiceAlias       string
 	optRuntimeVersion     string
-	optModelName          string
+	optAWSSDKGoVersion    string
 	optDryRun             bool
 	optExistingController bool
+	optOutputPath         string
+	optModelName          string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -52,16 +53,13 @@ func init() {
 		os.Exit(1)
 	}
 	rootCmd.PersistentFlags().StringVarP(
-		&optOutputPath, "output", "o", "", "Path to ACK service controller directory to bootstrap",
-	)
-	rootCmd.PersistentFlags().StringVarP(
-		&optAWSSDKGoVersion, "aws-sdk-go-version", "v", "", "aws-sdk-go-version",
+		&optServiceAlias, "AWS service alias", "s", "", "supplied AWS service alias",
 	)
 	rootCmd.PersistentFlags().StringVarP(
 		&optRuntimeVersion, "aws-controllers-k8s/runtime version", "r", "", "aws-controllers-k8s/runtime version",
 	)
 	rootCmd.PersistentFlags().StringVarP(
-		&optModelName, "service model name", "m", "", "service model name of the supplied service alias",
+		&optAWSSDKGoVersion, "aws-sdk-go-version", "v", "", "aws-sdk-go-version",
 	)
 	rootCmd.PersistentFlags().BoolVarP(
 		&optDryRun, "dry-run", "d", false, "If true, output files to stdout",
@@ -69,6 +67,16 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(
 		&optExistingController, "existing service controller", "e", false, "If true, update the existing controller",
 	)
+	rootCmd.PersistentFlags().StringVarP(
+		&optOutputPath, "output", "o", "", "Path to ACK service controller directory to bootstrap",
+	)
+	rootCmd.PersistentFlags().StringVarP(
+		&optModelName, "service model name", "m", "", "service model name of the supplied service alias",
+	)
+	rootCmd.MarkPersistentFlagRequired("AWS service alias")
+	rootCmd.MarkPersistentFlagRequired("aws-controllers-k8s/runtime version")
+	rootCmd.MarkPersistentFlagRequired("aws-sdk-go-version")
+	rootCmd.MarkPersistentFlagRequired("output")
 	rootCmd.AddCommand(templateCmd)
 }
 

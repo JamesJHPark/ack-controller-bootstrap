@@ -17,7 +17,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	awssdkmodel "github.com/aws/aws-sdk-go/private/model/api"
 	"github.com/gertd/go-pluralize"
 	"gopkg.in/src-d/go-git.v4"
 	"os"
@@ -29,11 +28,13 @@ import (
 	"time"
 )
 
+import awssdkmodel "github.com/aws/aws-sdk-go/private/model/api"
+
 var (
 	svcID           string
 	svcAbbreviation string
 	svcFullName     string
-	svcResources    []string
+	crdNames        []string
 	svcFile         string
 )
 
@@ -42,12 +43,12 @@ const (
 	defaultGitCloneTimeout = 180 * time.Second
 )
 
-// AWSSDKHelper is a helper struct for the aws-sdk-go load method with model API file
+// AWSSDKHelper is a helper struct for aws-sdk-go model API
 type AWSSDKHelper struct {
-	loader *awssdkmodel.Loader
+	loader *awssdkmodel
 }
 
-// getServiceResources infers aws-sdk-go to find the service metadata and resources
+// getServiceResources infers aws-sdk-go to find the service metadata and custom resources
 func getServiceResources(svcAlias string) error {
 	hd, err := os.UserHomeDir()
 	if err != nil {
@@ -128,8 +129,7 @@ func findModelAPI(repoDirPath string, svcIdentifier string) (string, error) {
 	return outFile, err
 }
 
-// modelAPI finds the aws-sdk-go model API object with the service api-2.json file.
-// Service metadata and resources are inferred from the API object
+// modelAPI infers service metadata and custom resources from the aws-sdk-go model API object
 func (a *AWSSDKHelper) modelAPI(filePath string) error {
 	// loads the API model file(s) and returns the map of API package
 	apis, err := a.loader.Load([]string{filePath})
@@ -154,7 +154,7 @@ func (a *AWSSDKHelper) modelAPI(filePath string) error {
 		if strings.HasPrefix(opName, "Create") {
 			resName := strings.TrimPrefix(opName, "Create")
 			if pluralize.IsSingular(resName) {
-				svcResources = append(svcResources, resName)
+				crdNames = append(crdNames, resName)
 			}
 		}
 	}

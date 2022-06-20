@@ -24,61 +24,66 @@ import (
 	"text/template"
 )
 
-type metaVars struct {
+type svcVars struct {
 	ServiceID           string
 	ServicePackageName  string
 	ServiceAbbreviation string
 	ServiceFullName     string
-	ServiceResources    []string
+	CRDNames            []string
 	AWSSDKGoVersion     string
 	RuntimeVersion      string
 }
 
-var updateFiles = []string{
+var svcStaticFiles = []string{
+	"CODE_OF_CONDUCT.md.tpl",
+	"CONTRIBUTING.md.tpl",
+	"GOVERNANCE.md.tpl",
+	"LICENSE.tpl",
 	"README.md.tpl",
+	"NOTICE.tpl",
 	"OWNERS.tpl",
 	"OWNERS_ALIASES.tpl",
 }
 
 var templateCmd = &cobra.Command{
-	Use:   "generate <service>",
-	Short: "generate template files for an ACK service controller",
+	Use:   "generate",
+	Short: "bootstrap an ACK service controller",
 	RunE:  generateTemplates,
 }
 
-// generateTemplates renders the template files in an ACK service controller repository
+// generateTemplates generates the template files and directories in an ACK service controller repository
 func generateTemplates(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("please specify the AWS service alias to generate template files")
+	if optServiceAlias == "" {
+		return fmt.Errorf("please specify the AWS service alias to generate template files for an ACK service controller")
 	}
 	cd, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("unable to determine current working directory: %s\n", err)
 		os.Exit(1)
 	}
-	svcAlias := strings.ToLower(args[0])
+	svcAlias := strings.ToLower(optServiceAlias)
 	err = getServiceResources(svcAlias)
 	if err != nil {
 		return err
 	}
 
-	// Initialize tplVars with the inferred service metadata and resources
-	tplVars := metaVars{
+	// Set tplVars with service metadata, custom resource names, and aws-sdk-go, ACK runtime versions
+	tplVars := svcVars{
 		ServiceID:           svcID,
 		ServicePackageName:  svcAlias,
 		ServiceAbbreviation: svcAbbreviation,
 		ServiceFullName:     svcFullName,
-		ServiceResources:    svcResources,
+		CRDNames:            crdNames,
 		AWSSDKGoVersion:     optAWSSDKGoVersion,
 		RuntimeVersion:      optRuntimeVersion,
 	}
 
 	// Append the template files inside the template directory to filePaths.
-	// For an existing service controller, update the files in the updateFiles slice
+	// For an existing service controller, update the list of files in the svcStaticFiles slice
 	var filePaths []string
 	basePath := filepath.Join(cd, "template")
 	if optExistingController {
-		filePaths = updateFiles
+		filePaths = svcStaticFiles
 	} else {
 		err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -91,7 +96,7 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Loop over the template file paths to parse, execute, and render the files/directories
+	// Loop over the template file paths to parse, execute, and render the files
 	// in an ACK service controller repository
 	for _, filePath := range filePaths {
 		if optExistingController {
@@ -105,7 +110,6 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		if err = tmp.Execute(&buf, tplVars); err != nil {
 			return err
 		}
-		// Dry-run with default value set to false
 		if optDryRun {
 			fmt.Printf("============================= %s ======================================\n", filePath)
 			fmt.Println(strings.TrimSpace(buf.String()))
