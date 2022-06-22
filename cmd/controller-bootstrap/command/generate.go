@@ -57,6 +57,7 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		fmt.Printf("unable to determine current working directory: %s\n", err)
 		os.Exit(1)
 	}
+
 	svcAlias := strings.ToLower(optServiceAlias)
 	err = getServiceResources(svcAlias)
 	if err != nil {
