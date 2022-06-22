@@ -41,9 +41,6 @@ var staticFiles = []string{
 	"GOVERNANCE.md.tpl",
 	"LICENSE.tpl",
 	"NOTICE.tpl",
-	"OWNERS.tpl",
-	"OWNERS_ALIASES.tpl",
-	"README.md.tpl",
 	"SECURITY.md.tpl",
 }
 

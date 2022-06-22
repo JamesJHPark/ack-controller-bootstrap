@@ -31,11 +31,11 @@ import (
 )
 
 var (
+	svcFile         string
 	svcID           string
 	svcAbbreviation string
 	svcFullName     string
 	crdNames        []string
-	svcFile         string
 )
 
 const (
