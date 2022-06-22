@@ -94,6 +94,7 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 	// Loop over the template file paths to parse and render the files
 	// in an ACK service controller repository
 	for _, filePath := range filePaths {
+
 		if optExistingController {
 			filePath = filepath.Join(basePath, filePath)
 		}
