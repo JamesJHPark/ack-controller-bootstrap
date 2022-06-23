@@ -33,6 +33,7 @@ type svcVars struct {
 	AWSSDKGoVersion     string
 	RuntimeVersion      string
 	ServiceModelName    string
+	TestInfraCommitSHA  string
 }
 
 var staticFiles = []string{
@@ -42,6 +43,7 @@ var staticFiles = []string{
 	"LICENSE.tpl",
 	"NOTICE.tpl",
 	"SECURITY.md.tpl",
+	"READ_BEFORE_COMMIT.md.tpl",
 }
 
 var templateCmd = &cobra.Command{
@@ -72,6 +74,7 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 		AWSSDKGoVersion:     optAWSSDKGoVersion,
 		RuntimeVersion:      optRuntimeVersion,
 		ServiceModelName:    optModelName,
+		TestInfraCommitSHA:  optTestInfraCommitSHA,
 	}
 
 	// Append the template files inside the template directory to filePaths.
@@ -95,7 +98,6 @@ func generateTemplates(cmd *cobra.Command, args []string) error {
 	// Loop over the template file paths to parse and render the files
 	// in an ACK service controller repository
 	for _, filePath := range filePaths {
-
 		if optExistingController {
 			filePath = filepath.Join(basePath, filePath)
 		}

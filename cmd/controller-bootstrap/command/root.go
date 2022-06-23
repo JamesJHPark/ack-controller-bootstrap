@@ -26,13 +26,14 @@ const (
 )
 
 var (
-	optDryRun             bool
 	optServiceAlias       string
-	optModelName          string
-	optAWSSDKGoVersion    string
 	optRuntimeVersion     string
+	optAWSSDKGoVersion    string
+	optDryRun             bool
 	optExistingController bool
 	optOutputPath         string
+	optModelName          string
+	optTestInfraCommitSHA string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -43,31 +44,35 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(
-		&optDryRun, "dry-run", "d", false, "Optional: if true, output files to stdout",
+	rootCmd.PersistentFlags().StringVar(
+		&optServiceAlias, "aws-service-alias", "", "AWS service alias",
 	)
-	rootCmd.PersistentFlags().StringVarP(
-		&optServiceAlias, "aws-service-alias", "s", "", "Supplied AWS service alias",
+	rootCmd.PersistentFlags().StringVar(
+		&optRuntimeVersion, "ack-runtime-version", "", "Version of aws-controllers-k8s/runtime",
 	)
-	rootCmd.PersistentFlags().StringVarP(
-		&optModelName, "service-model-name", "m", "", "Optional: service model name of the supplied service alias",
+	rootCmd.PersistentFlags().StringVar(
+		&optAWSSDKGoVersion, "aws-sdk-go-version", "", "Version of github.com/aws/aws-sdk-go used to infer service metadata and resources",
 	)
-	rootCmd.PersistentFlags().StringVarP(
-		&optAWSSDKGoVersion, "aws-sdk-go-version", "v", "", "Version of github.com/aws/aws-sdk-go used to infer service metadata and resources",
+	rootCmd.PersistentFlags().BoolVar(
+		&optDryRun, "dry-run", false, "Optional: if true, output files to stdout",
 	)
-	rootCmd.PersistentFlags().StringVarP(
-		&optRuntimeVersion, "ack-runtime-version", "r", "", "Version of aws-controllers-k8s/runtime",
+	rootCmd.PersistentFlags().BoolVar(
+		&optExistingController, "existing-controller", false, "Optional: if true, update the existing service controller",
 	)
-	rootCmd.PersistentFlags().BoolVarP(
-		&optExistingController, "existing-service-controller", "e", false, "Optional: if true, update the existing service controller",
+	rootCmd.PersistentFlags().StringVar(
+		&optOutputPath, "output", "", "Path to ACK service controller directory to bootstrap",
 	)
-	rootCmd.PersistentFlags().StringVarP(
-		&optOutputPath, "output", "o", "", "Path to ACK service controller directory to bootstrap",
+	rootCmd.PersistentFlags().StringVar(
+		&optModelName, "model-name", "", "Optional: service model name of the corresponding service alias",
+	)
+	rootCmd.PersistentFlags().StringVar(
+		&optTestInfraCommitSHA, "test-infra-commit-sha", "", "Commit SHA of aws-controllers-k8s/test-infra",
 	)
 	rootCmd.MarkPersistentFlagRequired("aws-service-alias")
-	rootCmd.MarkPersistentFlagRequired("aws-sdk-go-version")
 	rootCmd.MarkPersistentFlagRequired("ack-runtime-version")
+	rootCmd.MarkPersistentFlagRequired("aws-sdk-go-version")
 	rootCmd.MarkPersistentFlagRequired("output")
+	rootCmd.MarkPersistentFlagRequired("test-infra-commit-sha")
 	rootCmd.AddCommand(templateCmd)
 }
 
