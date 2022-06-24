@@ -14,7 +14,6 @@
 package command
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"github.com/gertd/go-pluralize"
@@ -22,7 +21,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -59,22 +57,21 @@ func getServiceResources(svcAlias string) error {
 	defer cancel()
 	sdkDir, err := ensureSDKRepo(ctx, ackCacheDir)
 
-	// If the service alias does not match with the serviceID in api-2.json,
+	// If the service alias does not match with the serviceId in api-2.json,
 	// the supplied service model name is passed into findModelPath
-	var apiFile = ""
 	svcModelName := svcAlias
 	if optModelName != "" {
 		svcModelName = strings.ToLower(optModelName)
 	}
-	apiFile, err = findModelPath(sdkDir, svcModelName)
+	modelPath, err := findModelPath(sdkDir, svcModelName)
 	if err != nil {
 		return err
 	}
-	if apiFile == "" {
-		return fmt.Errorf("unable to find the api-2.json file of the service alias, please try specifying the service model name")
+	if modelPath == "" {
+		return fmt.Errorf("unable to find the api-2.json file, please try specifying the service model name")
 	}
 	h := newAWSSDKHelper(sdkDir)
-	err = h.modelAPI(apiFile)
+	err = h.modelAPI(modelPath)
 	if err != nil {
 		return err
 	}
@@ -91,44 +88,26 @@ func newAWSSDKHelper(basePath string) *AWSSDKHelper {
 	}
 }
 
-// findModelPath returns api-2.json file path of a supplied AWS service alias
+// findModelPath returns the path of service model api-2.json file in aws-sdk-go
 func findModelPath(sdkDir string, modelName string) (string, error) {
-	apisPath := filepath.Join(sdkDir, "models/apis", modelName)
-	var files []string
-	err := filepath.Walk(apisPath, func(path string, info os.FileInfo, err error) error {
+	modelDir := filepath.Join(sdkDir, "models", "apis", modelName)
+	file := ""
+	err := filepath.Walk(modelDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if strings.Contains(path, "api-2.json") {
-			files = append(files, path)
+		if info.Name() == "api-2.json" {
+			file = path
 		}
 		return nil
 	})
-	for _, file := range files {
-		openFile, err := os.Open(file)
-		if err != nil {
-			return file, err
-		}
-		defer openFile.Close()
-		scanner := bufio.NewScanner(openFile)
-		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), "serviceId") {
-				getServiceID := strings.Split(scanner.Text(), ":")[1]
-				re := regexp.MustCompile(`[," \t]`)
-				getServiceID = strings.ToLower(re.ReplaceAllString(getServiceID, ``))
-				if getServiceID == modelName {
-					return file, nil
-				}
-			}
-		}
-	}
-	return "", err
+	return file, err
 }
 
 // modelAPI extracts the service metadata and API operations from aws-sdk-go model API object
-func (a *AWSSDKHelper) modelAPI(filePath string) error {
+func (a *AWSSDKHelper) modelAPI(path string) error {
 	// loads the API model file(s) and returns the map of API package
-	apis, err := a.loader.Load([]string{filePath})
+	apis, err := a.loader.Load([]string{path})
 	if err != nil {
 		return err
 	}
