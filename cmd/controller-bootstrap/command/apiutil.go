@@ -31,7 +31,6 @@ import (
 )
 
 var (
-	svcFile         string
 	svcID           string
 	svcAbbreviation string
 	svcFullName     string
@@ -55,26 +54,27 @@ func getServiceResources(svcAlias string) error {
 		fmt.Printf("unable to determine $HOME: %s\n", err)
 		os.Exit(1)
 	}
-	sdkDirDefaultPath := filepath.Join(hd, ".cache", "aws-controllers-k8s")
+	ackCacheDir := filepath.Join(hd, ".cache", "aws-controllers-k8s")
 	ctx, cancel := contextWithSigterm(context.Background())
 	defer cancel()
-	sdkDir, err := ensureSDKRepo(ctx, sdkDirDefaultPath)
+	sdkDir, err := ensureSDKRepo(ctx, ackCacheDir)
 
-	// If the supplied service alias and service ID do not match,
-	// pass in the service model name to modelAPIPath
+	// If the service alias does not match with the serviceID in api-2.json,
+	// the supplied service model name is passed into findModelPath
+	var apiFile = ""
+	svcModelName := svcAlias
 	if optModelName != "" {
-		svcFile, err = modelAPIPath(sdkDir, optModelName)
-	} else {
-		svcFile, err = modelAPIPath(sdkDir, svcAlias)
+		svcModelName = strings.ToLower(optModelName)
 	}
+	apiFile, err = findModelPath(sdkDir, svcModelName)
 	if err != nil {
 		return err
 	}
-	if svcFile == "" {
-		return fmt.Errorf("unable to find the service api-2.json file, please specify the service model name")
+	if apiFile == "" {
+		return fmt.Errorf("unable to find the api-2.json file of the service alias, please try specifying the service model name")
 	}
 	h := newAWSSDKHelper(sdkDir)
-	err = h.modelAPI(svcFile)
+	err = h.modelAPI(apiFile)
 	if err != nil {
 		return err
 	}
@@ -82,33 +82,32 @@ func getServiceResources(svcAlias string) error {
 }
 
 // newAWSSDKHelper returns a new AWSSDKHelper struct
-func newAWSSDKHelper(repoDirPath string) *AWSSDKHelper {
+func newAWSSDKHelper(basePath string) *AWSSDKHelper {
 	return &AWSSDKHelper{
 		loader: &awssdkmodel.Loader{
-			BaseImport:            repoDirPath,
+			BaseImport:            basePath,
 			IgnoreUnsupportedAPIs: true,
 		},
 	}
 }
 
-// modelAPIPath returns the api-2.json file path of a supplied AWS service alias
-func modelAPIPath(repoDirPath string, svcIdentifier string) (string, error) {
-	apisPath := filepath.Join(repoDirPath, "models", "apis")
-	var filePaths []string
+// findModelPath returns api-2.json file path of a supplied AWS service alias
+func findModelPath(sdkDir string, modelName string) (string, error) {
+	apisPath := filepath.Join(sdkDir, "models/apis", modelName)
+	var files []string
 	err := filepath.Walk(apisPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if strings.Contains(path, "api-2.json") {
-			filePaths = append(filePaths, path)
+			files = append(files, path)
 		}
 		return nil
 	})
-	outPath := ""
-	for _, filePath := range filePaths {
-		openFile, err := os.Open(filePath)
+	for _, file := range files {
+		openFile, err := os.Open(file)
 		if err != nil {
-			return outPath, err
+			return file, err
 		}
 		defer openFile.Close()
 		scanner := bufio.NewScanner(openFile)
@@ -117,34 +116,39 @@ func modelAPIPath(repoDirPath string, svcIdentifier string) (string, error) {
 				getServiceID := strings.Split(scanner.Text(), ":")[1]
 				re := regexp.MustCompile(`[," \t]`)
 				getServiceID = strings.ToLower(re.ReplaceAllString(getServiceID, ``))
-				if getServiceID == svcIdentifier {
-					outPath = filePath
-					return outPath, err
+				if getServiceID == modelName {
+					return file, nil
 				}
 			}
 		}
 	}
-	return outPath, err
+	return "", err
 }
 
-// modelAPI finds the service metadata and custom resource names from aws-sdk-go model API object
+// modelAPI extracts the service metadata and API operations from aws-sdk-go model API object
 func (a *AWSSDKHelper) modelAPI(filePath string) error {
 	// loads the API model file(s) and returns the map of API package
 	apis, err := a.loader.Load([]string{filePath})
 	if err != nil {
 		return err
 	}
-	var opNames []string
+	var operationNames []string
 	// apis is a map, keyed by the service package names, of pointers to aws-sdk-go model API objects
 	for _, api := range apis {
 		_ = api.ServicePackageDoc()
 		svcID = api.Metadata.ServiceID
 		svcAbbreviation = api.Metadata.ServiceAbbreviation
 		svcFullName = api.Metadata.ServiceFullName
-		opNames = api.OperationNames()
+		operationNames = api.OperationNames()
 	}
+	getCRDNames(operationNames)
+	return nil
+}
+
+// getCRDNames finds custom resource names with the prefix "Create" followed by a singular noun
+// to append to the slice, crdNames
+func getCRDNames(opNames []string) {
 	pluralize := pluralize.NewClient()
-	// search for operations with the prefix "Create" and append the custom resource names to crdNames
 	for _, opName := range opNames {
 		if strings.HasPrefix(opName, "CreateBatch") {
 			continue
@@ -156,7 +160,6 @@ func (a *AWSSDKHelper) modelAPI(filePath string) error {
 			}
 		}
 	}
-	return nil
 }
 
 // ensureSDKRepo ensures that we have a git clone'd copy of the aws-sdk-go
