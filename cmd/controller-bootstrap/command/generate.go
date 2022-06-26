@@ -24,7 +24,7 @@ import (
 	"text/template"
 )
 
-type svcVars struct {
+type templateVars struct {
 	ServiceID           string
 	ServicePackageName  string
 	ServiceAbbreviation string
@@ -33,99 +33,95 @@ type svcVars struct {
 	AWSSDKGoVersion     string
 	RuntimeVersion      string
 	ServiceModelName    string
-	TestInfraCommitSHA  string
-}
-
-var staticFiles = []string{
-	"CODE_OF_CONDUCT.md.tpl",
-	"CONTRIBUTING.md.tpl",
-	"GOVERNANCE.md.tpl",
-	"LICENSE.tpl",
-	"NOTICE.tpl",
-	"SECURITY.md.tpl",
-	"READ_BEFORE_COMMIT.md.tpl",
+	//TestInfraCommitSHA  string
 }
 
 var templateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "bootstrap an ACK service controller",
-	RunE:  generateTemplates,
+	Short: "generate template files in an ACK service controller repository",
+	RunE:  generateController,
 }
 
-// generateTemplates generates the template files in an ACK service controller repository
-func generateTemplates(cmd *cobra.Command, args []string) error {
+// generateController creates the initial directories and files for a service controller
+// repository by rendering go template files.
+// TODO: When a controller is already existing, then this method only updates the project
+// description files.
+func generateController(cmd *cobra.Command, args []string) error {
 	cd, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("unable to determine current working directory: %s\n", err)
 		os.Exit(1)
 	}
-
-	svcAlias := strings.ToLower(optServiceAlias)
-	err = getServiceResources(svcAlias)
+	err = getServiceResources()
 	if err != nil {
 		return err
 	}
-	tplVars := svcVars{
+	// Append the template files inside the template directory to files.
+	var tplFiles []string
+	tplDir := filepath.Join(cd, "template")
+	err = filepath.Walk(tplDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			tplFiles = append(tplFiles, path)
+		}
+		return nil
+	})
+
+	// Loop over the template file paths to parse and render the files
+	// in an ACK service controller repository
+	for _, tplFile := range tplFiles {
+		if optExistingController {
+			tplFile = filepath.Join(tplDir, tplFile)
+		}
+		tmp, err := template.ParseFiles(tplFile)
+		if err != nil {
+			return err
+		}
+
+		tplVars := getTplVars()
+
+		var buf bytes.Buffer
+		if err = tmp.Execute(&buf, tplVars); err != nil {
+			return err
+		}
+
+		file := strings.TrimPrefix(tplFile, tplDir)
+		file = strings.TrimSuffix(file, ".tpl")
+		outPath := filepath.Join(optOutputPath, file)
+		outDir := filepath.Dir(outPath)
+
+		if optDryRun {
+			fmt.Printf("============================= %s ======================================\n", file)
+			fmt.Println(strings.TrimSpace(buf.String()))
+			continue
+		}
+
+		if _, err = ensureDir(outDir); err != nil {
+			return err
+		}
+		if err = ioutil.WriteFile(outPath, buf.Bytes(), 0666); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// getTplVars returns the templateVars struct populated with service metadata,
+// custom resource names, ACK test-infra commit SHA, aws-sdk-go and ACK runtime versions
+func getTplVars() templateVars {
+	return templateVars{
 		ServiceID:           svcID,
-		ServicePackageName:  svcAlias,
+		ServicePackageName:  strings.ToLower(optServiceAlias),
 		ServiceAbbreviation: svcAbbreviation,
 		ServiceFullName:     svcFullName,
 		CRDNames:            crdNames,
 		AWSSDKGoVersion:     optAWSSDKGoVersion,
 		RuntimeVersion:      optRuntimeVersion,
-		ServiceModelName:    optModelName,
-		TestInfraCommitSHA:  optTestInfraCommitSHA,
+		ServiceModelName:    strings.ToLower(optModelName),
+		//TestInfraCommitSHA:  optTestInfraCommitSHA,
 	}
-
-	// Append the template files inside the template directory to filePaths.
-	// For an existing service controller, only update the list of files in the staticFiles slice
-	var filePaths []string
-	basePath := filepath.Join(cd, "template")
-	if optExistingController {
-		filePaths = staticFiles
-	} else {
-		err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() {
-				filePaths = append(filePaths, path)
-			}
-			return nil
-		})
-	}
-
-	// Loop over the template file paths to parse and render the files
-	// in an ACK service controller repository
-	for _, filePath := range filePaths {
-		if optExistingController {
-			filePath = filepath.Join(basePath, filePath)
-		}
-		tmp, err := template.ParseFiles(filePath)
-		if err != nil {
-			return err
-		}
-		var buf bytes.Buffer
-		if err = tmp.Execute(&buf, tplVars); err != nil {
-			return err
-		}
-		trimPath := strings.TrimPrefix(filePath, basePath)
-		trimPath = strings.TrimSuffix(trimPath, ".tpl")
-		if optDryRun {
-			fmt.Printf("============================= %s ======================================\n", trimPath)
-			fmt.Println(strings.TrimSpace(buf.String()))
-			continue
-		}
-		outPath := filepath.Join(optOutputPath, trimPath)
-		outDir := filepath.Dir(outPath)
-		if _, err := ensureDir(outDir); err != nil {
-			return err
-		}
-		if err := ioutil.WriteFile(outPath, buf.Bytes(), 0666); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // ensureDir makes sure that a supplied directory exists and
@@ -134,13 +130,29 @@ func ensureDir(fp string) (bool, error) {
 	fi, err := os.Stat(fp)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false,
-				os.MkdirAll(fp, os.ModePerm)
+			return false, os.MkdirAll(fp, os.ModePerm)
 		}
 		return false, err
 	}
 	if !fi.IsDir() {
 		return false, fmt.Errorf("expected %s to be a directory", fp)
 	}
+	if !isDirWriteable(fp) {
+		return true, fmt.Errorf("%s is not a writeable directory", fp)
+	}
+
 	return true, nil
+}
+
+// isDirWriteable returns true if the supplied directory path is writeable,
+// false otherwise
+func isDirWriteable(fp string) bool {
+	testPath := filepath.Join(fp, "test")
+	f, err := os.Create(testPath)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	os.Remove(testPath)
+	return true
 }

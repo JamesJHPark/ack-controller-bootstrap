@@ -46,22 +46,23 @@ type AWSSDKHelper struct {
 }
 
 // getServiceResources infers aws-sdk-go to fetch the service metadata and custom resource names
-func getServiceResources(svcAlias string) error {
+func getServiceResources() error {
 	hd, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Printf("unable to determine $HOME: %s\n", err)
 		os.Exit(1)
 	}
-	ackCacheDir := filepath.Join(hd, ".cache", "aws-controllers-k8s")
+
+	dir := filepath.Join(hd, ".cache", "aws-controllers-k8s")
 	ctx, cancel := contextWithSigterm(context.Background())
 	defer cancel()
-	sdkDir, err := ensureSDKRepo(ctx, ackCacheDir)
+	sdkDir, err := ensureSDKRepo(ctx, dir)
 
 	// If the service alias does not match with the serviceId in api-2.json,
 	// the supplied service model name is passed into findModelPath
-	svcModelName := svcAlias
-	if optModelName != "" {
-		svcModelName = strings.ToLower(optModelName)
+	svcModelName := strings.ToLower(optModelName)
+	if optModelName == "" {
+		svcModelName = strings.ToLower(optServiceAlias)
 	}
 	modelPath, err := findModelPath(sdkDir, svcModelName)
 	if err != nil {
@@ -70,6 +71,7 @@ func getServiceResources(svcAlias string) error {
 	if modelPath == "" {
 		return fmt.Errorf("unable to find the api-2.json file, please try specifying the service model name")
 	}
+
 	h := newAWSSDKHelper(sdkDir)
 	err = h.modelAPI(modelPath)
 	if err != nil {
@@ -88,7 +90,7 @@ func newAWSSDKHelper(basePath string) *AWSSDKHelper {
 	}
 }
 
-// findModelPath returns the path of service model api-2.json file in aws-sdk-go
+// findModelPath returns the api-2.json file path of the service model name
 func findModelPath(sdkDir string, modelName string) (string, error) {
 	modelDir := filepath.Join(sdkDir, "models", "apis", modelName)
 	file := ""
