@@ -15,12 +15,16 @@ package command
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/spf13/cobra"
+	"gopkg.in/src-d/go-git.v4"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"text/template"
 )
 
@@ -43,6 +47,18 @@ var templateCmd = &cobra.Command{
 // TODO: When a controller is already existing, then this method only updates the project
 // description files.
 func generateController(cmd *cobra.Command, args []string) error {
+	hd, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Printf("unable to determine $HOME: %s\n", err)
+		os.Exit(1)
+	}
+	cacheACKDir := filepath.Join(hd, ".cache", "aws-controllers-k8s")
+	ctx, cancel := contextWithSigterm(context.Background())
+	defer cancel()
+	if err = ensureSDKRepo(ctx, cacheACKDir); err != nil {
+		return err
+	}
+
 	cd, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("unable to determine current working directory: %s\n", err)
@@ -122,4 +138,66 @@ func ensureDir(fp string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// ensureSDKRepo ensures that we have a git clone'd copy of the aws-sdk-go
+// repository, which we use model JSON files from.
+func ensureSDKRepo(
+	ctx context.Context,
+	cacheDir string,
+) error {
+	var err error
+	srcPath := filepath.Join(cacheDir, "src")
+	if err = os.MkdirAll(srcPath, os.ModePerm); err != nil {
+		return err
+	}
+
+	// Clone repository if it doen't exist
+	sdkDir = filepath.Join(srcPath, "aws-sdk-go")
+
+	if _, err = os.Stat(sdkDir); os.IsNotExist(err) {
+
+		ct, cancel := context.WithTimeout(ctx, defaultGitCloneTimeout)
+		defer cancel()
+		err = CloneRepository(ct, sdkDir, sdkRepoURL)
+		if err != nil {
+			return fmt.Errorf("canot clone repository: %v", err)
+		}
+	}
+	return err
+}
+
+// CloneRepository clones a git repository into a given directory.
+// Calling this function is equivalent to executing `git clone $repositoryURL $path`
+func CloneRepository(ctx context.Context, path, repositoryURL string) error {
+	_, err := git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
+		URL:      repositoryURL,
+		Progress: nil,
+		// Clone and fetch all tags
+		Tags: git.AllTags,
+	})
+	return err
+}
+
+func contextWithSigterm(ctx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	signalCh := make(chan os.Signal, 1)
+
+	// recreate the context.CancelFunc
+	cancelFunc := func() {
+		signal.Stop(signalCh)
+		cancel()
+	}
+
+	// notify on SIGINT or SIGTERM
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-signalCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	return ctx, cancelFunc
 }
