@@ -63,10 +63,7 @@ func getServiceResources() (*metaVars, error) {
 
 	modelPath, err := findModelPath()
 	if err != nil {
-		return nil, err
-	}
-	if modelPath == "" {
-		return nil, fmt.Errorf("unable to find the supplied service's API file, please try specifying the service model name")
+		return nil, fmt.Errorf("unable to find the supplied service's API file, please re-try specifying the service model name")
 	}
 
 	h := newAWSSDKHelper()
@@ -116,9 +113,9 @@ func newAWSSDKHelper() *AWSSDKHelper {
 
 // API returns the populated metaVars struct with the service metadata
 // and custom resource names extracted from the aws-sdk-go model API object
-func (a *AWSSDKHelper) API(modelPath string) (*metaVars, error) {
+func (h *AWSSDKHelper) API(modelPath string) (*metaVars, error) {
 	// loads the API model file(s) and returns the map of API package
-	apis, err := a.loader.Load([]string{modelPath})
+	apis, err := h.loader.Load([]string{modelPath})
 	if err != nil {
 		return nil, err
 	}
