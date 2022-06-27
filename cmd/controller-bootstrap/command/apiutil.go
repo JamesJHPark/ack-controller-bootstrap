@@ -31,10 +31,10 @@ import (
 type metaVars struct {
 	ServiceID           string
 	ServicePackageName  string
+	ServiceModelName    string
 	ServiceAbbreviation string
 	ServiceFullName     string
 	CRDNames            []string
-	ServiceModelName    string
 }
 
 const (
@@ -65,6 +65,9 @@ func getServiceResources() (*metaVars, error) {
 	if err != nil {
 		return nil, err
 	}
+	if modelPath == "" {
+		return nil, fmt.Errorf("unable to find the supplied service's API file, please try specifying the service model name")
+	}
 	h := newAWSSDKHelper()
 	svcVars, err := h.modelAPI(modelPath)
 	if err != nil {
@@ -73,24 +76,30 @@ func getServiceResources() (*metaVars, error) {
 	return svcVars, nil
 }
 
-// findModelPath returns file path to the supplied service's API file
+// findModelPath returns path to the supplied service's API file
 func findModelPath() (string, error) {
 	serviceModelName := strings.ToLower(optModelName)
 	if optModelName == "" {
 		serviceModelName = strings.ToLower(optServiceAlias)
 	}
 	apiPath := filepath.Join(sdkDir, "models", "apis", serviceModelName)
-	file := ""
+	apiFile := ""
 	err := filepath.Walk(apiPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.Name() == "api-2.json" {
-			file = path
+		if !info.IsDir() && info.Name() == "api-2.json" {
+			_, err = os.Open(path)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	})
-	return file, err
+	if err != nil {
+		return "", err
+	}
+	return apiFile, nil
 }
 
 // newAWSSDKHelper returns a new AWSSDKHelper struct
@@ -113,7 +122,7 @@ func (a *AWSSDKHelper) modelAPI(modelPath string) (*metaVars, error) {
 	// apis is a map, keyed by the service package names, of pointers to aws-sdk-go model API objects
 	for _, api := range apis {
 		_ = api.ServicePackageDoc()
-		svcMetaVars := setMetaVars(api)
+		svcMetaVars := serviceMetaVars(api)
 		return svcMetaVars, nil
 	}
 	return nil, err
@@ -121,19 +130,19 @@ func (a *AWSSDKHelper) modelAPI(modelPath string) (*metaVars, error) {
 
 // getMetaVars returns a MetaVars struct populated with service metadata
 // and custom resource names of the AWS service
-func setMetaVars(api *awssdkmodel.API) *metaVars {
+func serviceMetaVars(api *awssdkmodel.API) *metaVars {
 	return &metaVars{
 		ServicePackageName:  strings.ToLower(optServiceAlias),
 		ServiceID:           api.Metadata.ServiceID,
+		ServiceModelName:    strings.ToLower(optModelName),
 		ServiceAbbreviation: api.Metadata.ServiceAbbreviation,
 		ServiceFullName:     api.Metadata.ServiceFullName,
 		CRDNames:            getCRDNames(api),
-		ServiceModelName:    strings.ToLower(optModelName),
 	}
 }
 
-// getCRDNames finds custom resource names with the prefix "Create" followed by a singular noun
-// to append to the slice, crdNames
+// getCRDNames appends custom resource names with the prefix "Create" followed by a singular noun
+// to the slice, crdNames
 func getCRDNames(api *awssdkmodel.API) []string {
 	var crdNames []string
 	pluralize := pluralize.NewClient()
