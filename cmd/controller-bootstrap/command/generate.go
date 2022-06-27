@@ -48,6 +48,7 @@ func generateController(cmd *cobra.Command, args []string) error {
 		fmt.Printf("unable to determine current working directory: %s\n", err)
 		os.Exit(1)
 	}
+
 	svcVars, err := getServiceResources()
 	if err != nil {
 		return err
@@ -58,23 +59,23 @@ func generateController(cmd *cobra.Command, args []string) error {
 		optRuntimeVersion,
 		optModelName,
 	}
-	// Append the template files inside the template directory to files.
-	var tplFiles []string
+	// Append the template files inside the template directory to tplPaths.
+	var tplPaths []string
 	tplDir := filepath.Join(cd, "template")
 	err = filepath.Walk(tplDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
-			tplFiles = append(tplFiles, path)
+			tplPaths = append(tplPaths, path)
 		}
 		return nil
 	})
 
-	// Loop over the template file paths to parse and render the files
-	// in an ACK service controller repository
-	for _, tplFile := range tplFiles {
-		tmp, err := template.ParseFiles(tplFile)
+	// Loop over the template files from the template directory
+	// and parse, render the files in an ACK service controller repository
+	for _, tplPath := range tplPaths {
+		tmp, err := template.ParseFiles(tplPath)
 		if err != nil {
 			return err
 		}
@@ -84,7 +85,7 @@ func generateController(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		file := strings.TrimPrefix(tplFile, tplDir)
+		file := strings.TrimPrefix(tplPath, tplDir)
 		file = strings.TrimSuffix(file, ".tpl")
 
 		if optDryRun {

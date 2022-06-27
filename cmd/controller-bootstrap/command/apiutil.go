@@ -68,8 +68,9 @@ func getServiceResources() (*metaVars, error) {
 	if modelPath == "" {
 		return nil, fmt.Errorf("unable to find the supplied service's API file, please try specifying the service model name")
 	}
+
 	h := newAWSSDKHelper()
-	svcVars, err := h.modelAPI(modelPath)
+	svcVars, err := h.API(modelPath)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +94,7 @@ func findModelPath() (string, error) {
 			if err != nil {
 				return err
 			}
+			apiFile = path
 		}
 		return nil
 	})
@@ -112,14 +114,16 @@ func newAWSSDKHelper() *AWSSDKHelper {
 	}
 }
 
-// modelAPI extracts the service metadata and API operations from aws-sdk-go model API object
-func (a *AWSSDKHelper) modelAPI(modelPath string) (*metaVars, error) {
+// API returns the populated metaVars struct with the service metadata
+// and custom resource names extracted from the aws-sdk-go model API object
+func (a *AWSSDKHelper) API(modelPath string) (*metaVars, error) {
 	// loads the API model file(s) and returns the map of API package
 	apis, err := a.loader.Load([]string{modelPath})
 	if err != nil {
 		return nil, err
 	}
-	// apis is a map, keyed by the service package names, of pointers to aws-sdk-go model API objects
+	// apis is a map, keyed by the service package name, of pointers
+	// to aws-sdk-go model API objects
 	for _, api := range apis {
 		_ = api.ServicePackageDoc()
 		svcMetaVars := serviceMetaVars(api)
@@ -128,8 +132,8 @@ func (a *AWSSDKHelper) modelAPI(modelPath string) (*metaVars, error) {
 	return nil, err
 }
 
-// getMetaVars returns a MetaVars struct populated with service metadata
-// and custom resource names of the AWS service
+// serviceMetaVars returns a metaVars struct populated with metadata
+// and custom resource names for the supplied AWS service
 func serviceMetaVars(api *awssdkmodel.API) *metaVars {
 	return &metaVars{
 		ServicePackageName:  strings.ToLower(optServiceAlias),
