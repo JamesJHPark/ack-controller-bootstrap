@@ -25,14 +25,10 @@ import (
 )
 
 type templateVars struct {
-	ServiceID           string
-	ServicePackageName  string
-	ServiceAbbreviation string
-	ServiceFullName     string
-	CRDNames            []string
-	AWSSDKGoVersion     string
-	RuntimeVersion      string
-	ServiceModelName    string
+	*metaVars
+	AWSSDKGoVersion  string
+	RuntimeVersion   string
+	ServiceModelName string
 	//TestInfraCommitSHA  string
 }
 
@@ -52,9 +48,15 @@ func generateController(cmd *cobra.Command, args []string) error {
 		fmt.Printf("unable to determine current working directory: %s\n", err)
 		os.Exit(1)
 	}
-	err = getServiceResources()
+	svcVars, err := getServiceResources()
 	if err != nil {
 		return err
+	}
+	tplVars := &templateVars{
+		svcVars,
+		optAWSSDKGoVersion,
+		optRuntimeVersion,
+		optModelName,
 	}
 	// Append the template files inside the template directory to files.
 	var tplFiles []string
@@ -72,15 +74,10 @@ func generateController(cmd *cobra.Command, args []string) error {
 	// Loop over the template file paths to parse and render the files
 	// in an ACK service controller repository
 	for _, tplFile := range tplFiles {
-		if optExistingController {
-			tplFile = filepath.Join(tplDir, tplFile)
-		}
 		tmp, err := template.ParseFiles(tplFile)
 		if err != nil {
 			return err
 		}
-
-		tplVars := getTplVars()
 
 		var buf bytes.Buffer
 		if err = tmp.Execute(&buf, tplVars); err != nil {
@@ -89,8 +86,6 @@ func generateController(cmd *cobra.Command, args []string) error {
 
 		file := strings.TrimPrefix(tplFile, tplDir)
 		file = strings.TrimSuffix(file, ".tpl")
-		outPath := filepath.Join(optOutputPath, file)
-		outDir := filepath.Dir(outPath)
 
 		if optDryRun {
 			fmt.Printf("============================= %s ======================================\n", file)
@@ -98,6 +93,8 @@ func generateController(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		outPath := filepath.Join(optOutputPath, file)
+		outDir := filepath.Dir(outPath)
 		if _, err = ensureDir(outDir); err != nil {
 			return err
 		}
@@ -106,22 +103,6 @@ func generateController(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
-}
-
-// getTplVars returns the templateVars struct populated with service metadata,
-// custom resource names, ACK test-infra commit SHA, aws-sdk-go and ACK runtime versions
-func getTplVars() templateVars {
-	return templateVars{
-		ServiceID:           svcID,
-		ServicePackageName:  strings.ToLower(optServiceAlias),
-		ServiceAbbreviation: svcAbbreviation,
-		ServiceFullName:     svcFullName,
-		CRDNames:            crdNames,
-		AWSSDKGoVersion:     optAWSSDKGoVersion,
-		RuntimeVersion:      optRuntimeVersion,
-		ServiceModelName:    strings.ToLower(optModelName),
-		//TestInfraCommitSHA:  optTestInfraCommitSHA,
-	}
 }
 
 // ensureDir makes sure that a supplied directory exists and

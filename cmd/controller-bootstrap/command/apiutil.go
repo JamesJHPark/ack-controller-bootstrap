@@ -28,12 +28,14 @@ import (
 	awssdkmodel "github.com/aws/aws-sdk-go/private/model/api"
 )
 
-var (
-	svcID           string
-	svcAbbreviation string
-	svcFullName     string
-	crdNames        []string
-)
+type metaVars struct {
+	ServiceID           string
+	ServicePackageName  string
+	ServiceAbbreviation string
+	ServiceFullName     string
+	CRDNames            []string
+	ServiceModelName    string
+}
 
 const (
 	sdkRepoURL             = "https://github.com/aws/aws-sdk-go"
@@ -46,55 +48,40 @@ type AWSSDKHelper struct {
 }
 
 // getServiceResources infers aws-sdk-go to fetch the service metadata and custom resource names
-func getServiceResources() error {
+func getServiceResources() (*metaVars, error) {
 	hd, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Printf("unable to determine $HOME: %s\n", err)
 		os.Exit(1)
 	}
-
-	dir := filepath.Join(hd, ".cache", "aws-controllers-k8s")
+	cacheACKDir := filepath.Join(hd, ".cache", "aws-controllers-k8s")
 	ctx, cancel := contextWithSigterm(context.Background())
 	defer cancel()
-	sdkDir, err := ensureSDKRepo(ctx, dir)
+	if err = ensureSDKRepo(ctx, cacheACKDir); err != nil {
+		return nil, err
+	}
 
-	// If the service alias does not match with the serviceId in api-2.json,
-	// the supplied service model name is passed into findModelPath
-	svcModelName := strings.ToLower(optModelName)
+	modelPath, err := findModelPath()
+	if err != nil {
+		return nil, err
+	}
+	h := newAWSSDKHelper()
+	svcVars, err := h.modelAPI(modelPath)
+	if err != nil {
+		return nil, err
+	}
+	return svcVars, nil
+}
+
+// findModelPath returns file path to the supplied service's API file
+func findModelPath() (string, error) {
+	serviceModelName := strings.ToLower(optModelName)
 	if optModelName == "" {
-		svcModelName = strings.ToLower(optServiceAlias)
+		serviceModelName = strings.ToLower(optServiceAlias)
 	}
-	modelPath, err := findModelPath(sdkDir, svcModelName)
-	if err != nil {
-		return err
-	}
-	if modelPath == "" {
-		return fmt.Errorf("unable to find the api-2.json file, please try specifying the service model name")
-	}
-
-	h := newAWSSDKHelper(sdkDir)
-	err = h.modelAPI(modelPath)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// newAWSSDKHelper returns a new AWSSDKHelper struct
-func newAWSSDKHelper(basePath string) *AWSSDKHelper {
-	return &AWSSDKHelper{
-		loader: &awssdkmodel.Loader{
-			BaseImport:            basePath,
-			IgnoreUnsupportedAPIs: true,
-		},
-	}
-}
-
-// findModelPath returns the api-2.json file path of the service model name
-func findModelPath(sdkDir string, modelName string) (string, error) {
-	modelDir := filepath.Join(sdkDir, "models", "apis", modelName)
+	apiPath := filepath.Join(sdkDir, "models", "apis", serviceModelName)
 	file := ""
-	err := filepath.Walk(modelDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(apiPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -106,31 +93,51 @@ func findModelPath(sdkDir string, modelName string) (string, error) {
 	return file, err
 }
 
-// modelAPI extracts the service metadata and API operations from aws-sdk-go model API object
-func (a *AWSSDKHelper) modelAPI(path string) error {
-	// loads the API model file(s) and returns the map of API package
-	apis, err := a.loader.Load([]string{path})
-	if err != nil {
-		return err
+// newAWSSDKHelper returns a new AWSSDKHelper struct
+func newAWSSDKHelper() *AWSSDKHelper {
+	return &AWSSDKHelper{
+		loader: &awssdkmodel.Loader{
+			BaseImport:            sdkDir,
+			IgnoreUnsupportedAPIs: true,
+		},
 	}
-	var operationNames []string
+}
+
+// modelAPI extracts the service metadata and API operations from aws-sdk-go model API object
+func (a *AWSSDKHelper) modelAPI(modelPath string) (*metaVars, error) {
+	// loads the API model file(s) and returns the map of API package
+	apis, err := a.loader.Load([]string{modelPath})
+	if err != nil {
+		return nil, err
+	}
 	// apis is a map, keyed by the service package names, of pointers to aws-sdk-go model API objects
 	for _, api := range apis {
 		_ = api.ServicePackageDoc()
-		svcID = api.Metadata.ServiceID
-		svcAbbreviation = api.Metadata.ServiceAbbreviation
-		svcFullName = api.Metadata.ServiceFullName
-		operationNames = api.OperationNames()
+		svcMetaVars := setMetaVars(api)
+		return svcMetaVars, nil
 	}
-	getCRDNames(operationNames)
-	return nil
+	return nil, err
+}
+
+// getMetaVars returns a MetaVars struct populated with service metadata
+// and custom resource names of the AWS service
+func setMetaVars(api *awssdkmodel.API) *metaVars {
+	return &metaVars{
+		ServicePackageName:  strings.ToLower(optServiceAlias),
+		ServiceID:           api.Metadata.ServiceID,
+		ServiceAbbreviation: api.Metadata.ServiceAbbreviation,
+		ServiceFullName:     api.Metadata.ServiceFullName,
+		CRDNames:            getCRDNames(api),
+		ServiceModelName:    strings.ToLower(optModelName),
+	}
 }
 
 // getCRDNames finds custom resource names with the prefix "Create" followed by a singular noun
 // to append to the slice, crdNames
-func getCRDNames(opNames []string) {
+func getCRDNames(api *awssdkmodel.API) []string {
+	var crdNames []string
 	pluralize := pluralize.NewClient()
-	for _, opName := range opNames {
+	for _, opName := range api.OperationNames() {
 		if strings.HasPrefix(opName, "CreateBatch") {
 			continue
 		}
@@ -141,22 +148,23 @@ func getCRDNames(opNames []string) {
 			}
 		}
 	}
+	return crdNames
 }
 
 // ensureSDKRepo ensures that we have a git clone'd copy of the aws-sdk-go
-// repository, which we use model JSON files from
+// repository, which we use model JSON files from.
 func ensureSDKRepo(
 	ctx context.Context,
 	cacheDir string,
-) (string, error) {
+) error {
 	var err error
 	srcPath := filepath.Join(cacheDir, "src")
 	if err = os.MkdirAll(srcPath, os.ModePerm); err != nil {
-		return "cannot create directory", err
+		return err
 	}
 
 	// Clone repository if it doen't exist
-	sdkDir := filepath.Join(srcPath, "aws-sdk-go")
+	sdkDir = filepath.Join(srcPath, "aws-sdk-go")
 
 	if _, err = os.Stat(sdkDir); os.IsNotExist(err) {
 
@@ -164,10 +172,10 @@ func ensureSDKRepo(
 		defer cancel()
 		err = CloneRepository(ct, sdkDir, sdkRepoURL)
 		if err != nil {
-			return "cannot clone repository: %v", err
+			return fmt.Errorf("canot clone repository: %v", err)
 		}
 	}
-	return sdkDir, err
+	return err
 }
 
 // CloneRepository clones a git repository into a given directory.
